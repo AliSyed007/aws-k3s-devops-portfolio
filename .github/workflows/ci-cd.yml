@@ -1,0 +1,52 @@
+name: build-and-deploy
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Podman login to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_USER: ${{ secrets.GHCR_USER }}
+        run: |
+          set -euo pipefail
+          echo "$GHCR_TOKEN" | podman login ghcr.io -u "$GHCR_USER" --password-stdin
+
+      - name: Build and push image
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          IMAGE_LATEST: ghcr.io/${{ github.repository }}:latest
+        run: |
+          set -euo pipefail
+          podman build -t "$IMAGE" .
+          podman push "$IMAGE"
+          podman tag "$IMAGE" "$IMAGE_LATEST"
+          podman push "$IMAGE_LATEST"
+
+  deploy:
+    runs-on: self-hosted
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to k3s
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+        run: |
+          set -euo pipefail
+          kubectl -n app apply -f k8s/
+          kubectl -n app set image deployment/myapp myapp="$IMAGE"
+          kubectl -n app rollout status deployment/myapp --timeout=180s
+          kubectl -n app get pods -o wide
