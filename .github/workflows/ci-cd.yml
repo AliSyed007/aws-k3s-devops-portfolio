@@ -15,12 +15,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Podman login to GHCR
+      - name: Podman login to GHCR (fail-fast if secrets missing)
         env:
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           GHCR_USER: ${{ secrets.GHCR_USER }}
         run: |
           set -euo pipefail
+
+          if [ -z "${GHCR_USER:-}" ]; then
+            echo "ERROR: GHCR_USER secret is missing or empty"
+            exit 1
+          fi
+
+          if [ -z "${GHCR_TOKEN:-}" ]; then
+            echo "ERROR: GHCR_TOKEN secret is missing or empty"
+            exit 1
+          fi
+
           echo "$GHCR_TOKEN" | podman login ghcr.io -u "$GHCR_USER" --password-stdin
 
       - name: Build and push image
