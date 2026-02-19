@@ -50,3 +50,4 @@ jobs:
           kubectl -n app set image deployment/myapp myapp="$IMAGE"
           kubectl -n app rollout status deployment/myapp --timeout=180s
           kubectl -n app get pods -o wide
+
